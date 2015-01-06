@@ -20,6 +20,8 @@ Gem::Specification.new do |gem|
   gem.add_dependency 'bunny', '~> 1.6.3'
   gem.add_dependency 'thread'
   gem.add_dependency 'thor'
+  gem.add_dependency 'sidekiq'
+  gem.add_dependency 'newrelic_rpm'
 
   gem.add_development_dependency 'rr'
   gem.add_development_dependency 'ruby-prof'
@@ -30,4 +32,3 @@ Gem::Specification.new do |gem|
   gem.add_development_dependency 'simplecov-rcov-text'
   gem.add_development_dependency 'rake'
 end
-

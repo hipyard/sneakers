@@ -1,15 +1,19 @@
 require 'sneakers/queue'
 require 'sneakers/support/utils'
+require 'sneakers/metrics/newrelic_metrics'
+require 'newrelic_rpm'
 require 'timeout'
 
 module Sneakers
   module Worker
     attr_reader :queue, :id, :opts
+    attr_accessor :retry_count, :args
 
     # For now, a worker is hardly dependant on these concerns
     # (because it uses methods from them directly.)
     include Concerns::Logging
     include Concerns::Metrics
+    include ::NewRelic::Agent::Instrumentation::ControllerInstrumentation
 
     def initialize(queue = nil, pool = nil, opts = {})
       opts = opts.merge(self.class.queue_opts || {})
@@ -34,6 +38,11 @@ module Sneakers
     def reject!; :reject; end
     def requeue!; :requeue; end
 
+    # for the retries on sidekiq
+    def send_to_rabbitmq
+      self.class.enqueue(*args, retry_count: (retry_count ? retry_count.to_i + 1 : 0))
+    end
+
     def publish(msg, opts)
       to_queue = opts.delete(:to_queue)
       opts[:routing_key] ||= to_queue
@@ -54,6 +63,11 @@ module Sneakers
             metrics.timing("work.#{self.class.name}.time") do
               if @call_with_params
                 res = work_with_params(msg, delivery_info, metadata)
+              elsif handler.class.name == 'Sneakers::Handlers::Sidekiq'
+                args = JSON.parse(msg)
+                perform_action_with_newrelic_trace(name: 'work', category: 'OtherTransaction/SneakersJob', class_name: self.class.name, job_arguments: args) do
+                  res = work(*args) # override to support *args, removing other work method
+                end
               else
                 res = work(msg)
               end
@@ -62,7 +76,7 @@ module Sneakers
         rescue Timeout::Error
           res = :timeout
           worker_error('timeout')
-        rescue => ex
+        rescue Exception => ex # retrying on every exception, not only runtime ones
           res = :error
           error = ex
           worker_error('unexpected error', ex)
@@ -136,16 +150,16 @@ module Sneakers
         @queue_opts = opts
       end
 
-      def enqueue(msg)
-        publisher.publish(msg, :to_queue => @queue_name)
+      # for the retries on sidekiq
+      def enqueue(*msg, retry_count: 0)
+        publisher.publish(msg.to_json, to_queue: @queue_name, headers: { retry_count: retry_count, sidekiq_class: self.name })
       end
 
       private
 
       def publisher
-        @publisher ||= Sneakers::Publisher.new
+        @publisher ||= Sneakers::Publisher.new(exchange: @queue_opts[:exchange].to_s)
       end
     end
   end
 end
-

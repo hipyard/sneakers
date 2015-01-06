@@ -141,8 +141,8 @@ describe Sneakers::Worker do
       mock = MiniTest::Mock.new
 
       mock.expect(:publish, true) do |msg, opts|
-        msg.must_equal(message)
-        opts.must_equal(:to_queue => "defaults")
+        msg.must_equal([message].to_json)
+        opts.must_equal(:to_queue => "defaults", :headers => { :retry_count => 0, :sidekiq_class => "DefaultsWorker" })
       end
 
       stub(Sneakers::Publisher).new { mock }
