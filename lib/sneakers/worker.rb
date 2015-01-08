@@ -40,7 +40,9 @@ module Sneakers
 
     # for the retries on sidekiq
     def send_to_rabbitmq
+      return false if self.jid.blank?
       self.class.enqueue(*args, retry_count: (retry_count ? retry_count.to_i + 1 : 0))
+      true
     end
 
     def publish(msg, opts)

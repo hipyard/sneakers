@@ -9,6 +9,7 @@ module Sneakers
         @opts = opts
 
         @max_retries = @opts[:retry] || 25
+        @log_exceptions_after = @opts[:log_exceptions_after] || 0
       end
 
       def acknowledge(hdr, props, msg)
@@ -40,6 +41,10 @@ module Sneakers
         num_attempts = retry_count(props[:headers])
         queue_class = sidekiq_queue(props[:headers])
         begin
+          if num_attempts >= @log_exceptions_after
+            NewRelic::Agent.notice_error(reason, metric: "OtherTransaction/SneakersJob/#{queue_class}#work")
+            Honeybadger.notify_or_ignore(reason)
+          end
           ::Sidekiq::Middleware::Server::RetryJobs.new.send(:attempt_retry, queue_class.new, {'retry' => @max_retries, 'retry_count' => num_attempts, 'class' => queue_class, 'args' => args, 'jid' => SecureRandom.hex(12), 'failed_at' => Time.now}, 'default', reason)
         rescue Exception
         end
