@@ -8,7 +8,7 @@ module Sneakers
         @channel = channel
         @opts = opts
 
-        @max_retries = @opts[:retry] || 25
+        @max_retries = @opts[:retry] || 1
         @log_exceptions_after = @opts[:log_exceptions_after] || 0
       end
 
