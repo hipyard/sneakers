@@ -22,7 +22,7 @@ Gem::Specification.new do |gem|
   gem.add_dependency 'thor'
   gem.add_dependency 'sidekiq'
   gem.add_dependency 'newrelic_rpm'
-  gem.add_dependency 'honeybadger', '~> 1.16.7'
+  gem.add_dependency 'honeybadger'
 
   gem.add_development_dependency 'rr'
   gem.add_development_dependency 'ruby-prof'
