@@ -16,6 +16,9 @@ module Sneakers
     include ::NewRelic::Agent::Instrumentation::ControllerInstrumentation
 
     def initialize(queue = nil, pool = nil, opts = {})
+      l = Logger.new(Rails.root.join("log", "sneakers_called.log"))
+      l.info "initialize called with queue = #{queue}, pool = #{pool}, opts = #{opts}"
+
       opts = opts.merge(self.class.queue_opts || {})
       queue_name = self.class.queue_name
       opts = Sneakers::CONFIG.merge(opts)
@@ -38,11 +41,8 @@ module Sneakers
     def reject!; :reject; end
     def requeue!; :requeue; end
 
-    # for the retries on sidekiq
-    def send_to_rabbitmq
-      return false if self.jid.blank?
-      self.class.enqueue(*args, retry_count: (retry_count ? retry_count.to_i + 1 : 0))
-      true
+    def work(*args)
+      "::#{self.class.name.demodulize}".constantize.new.work(*args)
     end
 
     def publish(msg, opts)
@@ -155,6 +155,13 @@ module Sneakers
       # for the retries on sidekiq
       def enqueue(*msg, retry_count: 0)
         publisher.publish(msg.to_json, to_queue: @queue_name, headers: { retry_count: retry_count, sidekiq_class: self.name })
+      end
+
+      # for the retries on sidekiq
+      def send_to_rabbitmq(jid)
+        return false if jid.blank?
+        enqueue(*args, retry_count: (retry_count ? retry_count.to_i + 1 : 0))
+        true
       end
 
       private
